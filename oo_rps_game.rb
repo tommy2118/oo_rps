@@ -16,7 +16,7 @@ class Logger
     move_log.each do |round, moves|
       puts "Round: #{round} #{human.name}'s move: #{moves[0]} -- \
 #{computer.name}'s move: #{moves[1]}"
-    puts ""
+      puts ""
     end
     puts "*".center(65, '*')
     puts ""
@@ -148,18 +148,14 @@ class Computer < Player
     self.name = ['R2D2', 'Hal', 'Chappie', 'Sonny', 'Number 5'].sample
   end
 
-  def choose(stats)
-    if stats.human_rock_average > 0.33 &&
-       stats.human_paper_average < 0.50 &&
-       stats.human_scissors_average < 0.50 &&
+  def choose(stats, round)
+    self.move = Move.new(Move::VALUES.sample) if round <= 2
+
+    if stats.human_rock_average > 0.66
       self.move = Move.new('paper')
-    elsif stats.human_paper_average > 0.33 &&
-       stats.human_rock_average < 0.50 &&
-       stats.human_scissors_average < 0.50 &&
+    elsif stats.human_paper_average > 0.66
       self.move = Move.new('scissors')
-    elsif stats.human_scissors_average > 0.33 &&
-       stats.human_paper_average < 0.50 &&
-       stats.human_rock_average < 0.50 &&
+    elsif stats.human_scissors_average > 0.66
       self.move = Move.new('rock')
     else
       self.move = Move.new(Move::VALUES.sample)
@@ -261,7 +257,7 @@ class RpsGame
 
   def make_moves
     human.choose
-    computer.choose(stats)
+    computer.choose(stats, score.total_rounds)
   end
 
   def declare_round
