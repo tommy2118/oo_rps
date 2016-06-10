@@ -1,6 +1,76 @@
 # frozen_string_literal: true
+class Logger
+  attr_accessor :move_log
+
+  def initialize
+    @move_log = {}
+  end
+
+  def log_moves(score, human, computer)
+    move_log[score.total_rounds] = [human.move.value, computer.move.value]
+  end
+
+  def display_log(human, computer)
+    system('clear') || system('cls')
+    puts "Move Log".center(65, '*')
+    move_log.each do |round, moves|
+      puts "Round: #{round} #{human.name}'s move: #{moves[0]} -- \
+#{computer.name}'s move: #{moves[1]}"
+    puts ""
+    end
+    puts "*".center(65, '*')
+    puts ""
+  end
+end
+
+class Statistics
+  attr_accessor :log_file
+
+  def initialize(log_file)
+    @log_file = log_file
+  end
+
+  def human_rock_count
+    rocks = []
+    log_file.each do |_, moves|
+      rocks << moves[0] if moves[0] == "rock"
+    end
+    rocks.count
+  end
+
+  def human_paper_count
+    papers = []
+    log_file.each do |_, moves|
+      papers << moves[0] if moves[0] == "paper"
+    end
+    papers.count
+  end
+
+  def human_scissors_count
+    scissors = []
+    log_file.each do |_, moves|
+      scissors << moves[0] if moves[0] == "scissors"
+    end
+    scissors.count
+  end
+
+  def human_rock_average
+    human_rock_count / log_file.count.to_f
+  end
+
+  def human_paper_average
+    human_paper_count / log_file.count.to_f
+  end
+
+  def human_scissors_average
+    human_paper_count / log_file.count.to_f
+  end
+end
+
 class Move
   VALUES = ['rock', 'paper', 'scissors'].freeze
+
+  attr_reader :value
 
   def initialize(value)
     @value = value
@@ -65,7 +135,7 @@ class Human < Player
     choice = nil
     loop do
       puts "Please choose rock, paper, or scissors:"
-      choice = gets.chomp
+      choice = gets.chomp.downcase
       break if Move::VALUES.include? choice
       puts "Sorry, invalid choice."
     end
@@ -78,19 +148,34 @@ class Computer < Player
     self.name = ['R2D2', 'Hal', 'Chappie', 'Sonny', 'Number 5'].sample
   end
 
-  def choose
-    self.move = Move.new(Move::VALUES.sample)
+  def choose(stats)
+    if stats.human_rock_average > 0.33 &&
+       stats.human_paper_average < 0.50 &&
+       stats.human_scissors_average < 0.50 &&
+      self.move = Move.new('paper')
+    elsif stats.human_paper_average > 0.33 &&
+       stats.human_rock_average < 0.50 &&
+       stats.human_scissors_average < 0.50 &&
+      self.move = Move.new('scissors')
+    elsif stats.human_scissors_average > 0.33 &&
+       stats.human_paper_average < 0.50 &&
+       stats.human_rock_average < 0.50 &&
+      self.move = Move.new('rock')
+    else
+      self.move = Move.new(Move::VALUES.sample)
+    end
   end
 end
 
 class ScoreKeeper
   ROUNDS_TO_WIN = 3
 
-  attr_accessor :rounds, :tied_rounds
+  attr_accessor :rounds_this_game, :tied_rounds_this_game, :total_rounds
 
   def initialize
-    @rounds = 0
-    @tied_rounds = 0
+    @rounds_this_game = 0
+    @tied_rounds_this_game = 0
+    @total_rounds = 0
   end
 
   def tally_score(human, computer)
@@ -99,33 +184,38 @@ class ScoreKeeper
     elsif human.move < computer.move
       computer.increase_score
     else
-      self.tied_rounds += 1
+      self.tied_rounds_this_game += 1
     end
-    self.rounds += 1
+    self.rounds_this_game += 1
+    self.total_rounds += 1
   end
 
   def display_score(human, computer)
-    puts "After #{rounds} #{rounds == 1 ? 'round' : 'rounds'}, #{human.name} \
-has won #{human.score} and #{computer.name} has won #{computer.score}\
-.  #{tied_rounds} #{tied_rounds == 1 ? 'round has' : 'rounds have'} \
+    puts "After #{rounds_this_game} \
+#{rounds_this_game == 1 ? 'round' : 'rounds'},\
+#{human.name} has won #{human.score} and #{computer.name} has won \
+#{computer.score} .  #{tied_rounds_this_game} \
+#{tied_rounds_this_game == 1 ? 'round has' : 'rounds have'} \
 ended in a tie."
   end
 
   def reset_scores(human, computer)
     human.score = 0
     computer.score = 0
-    self.tied_rounds = 0
-    self.rounds = 0
+    self.tied_rounds_this_game = 0
+    self.rounds_this_game = 0
   end
 end
 
 class RpsGame
-  attr_accessor :human, :computer, :score
+  attr_accessor :human, :computer, :score, :logger, :stats
 
   def initialize
     @human = Human.new
     @computer = Computer.new
     @score = ScoreKeeper.new
+    @logger = Logger.new
+    @stats = Statistics.new(logger.move_log)
   end
 
   def display_welcome_message
@@ -171,7 +261,7 @@ class RpsGame
 
   def make_moves
     human.choose
-    computer.choose
+    computer.choose(stats)
   end
 
   def declare_round
@@ -179,6 +269,7 @@ class RpsGame
     display_round_winner
     score.tally_score(human, computer)
     score.display_score(human, computer)
+    logger.log_moves(score, human, computer)
   end
 
   def play_again?
@@ -198,8 +289,10 @@ class RpsGame
     display_welcome_message
     loop do
       play_round
+      score.reset_scores(human, computer)
       break unless play_again?
     end
+    logger.display_log(human, computer)
     display_goodbye_message
   end
 end
